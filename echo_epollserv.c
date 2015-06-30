@@ -8,9 +8,10 @@
 
 #define BUF_SIZE 100
 #define EPOLL_SIZE 50
+#define SERV_PORT 8000
 void error_handling(char *buf);
 
-int main1(int argc, char *argv[])
+int main(void)
 {
 	int serv_sock, clnt_sock;
 	struct sockaddr_in serv_adr, clnt_adr;
@@ -22,16 +23,11 @@ int main1(int argc, char *argv[])
 	struct epoll_event event;
 	int epfd, event_cnt;
 
-	if(argc !=2 ){
-		printf("usage : %s <port>\n", argv[0]);
-		exit(1);
-	}
-
 	serv_sock = socket(AF_INET, SOCK_STREAM, 0);
 	memset(&serv_adr, 0, sizeof(serv_adr));
 	serv_adr.sin_family = AF_INET;
 	serv_adr.sin_addr.s_addr = htonl(INADDR_ANY);
-	serv_adr.sin_port = htons(atoi(argv[1]));
+	serv_adr.sin_port = htons(SERV_PORT);
 
 	if(bind(serv_sock, (struct sockaddr*)&serv_adr, sizeof(serv_adr)) == -1)
 		error_handling("bind() error");
@@ -39,7 +35,7 @@ int main1(int argc, char *argv[])
 		error_handling("listen() error");
 
 	epfd = epoll_create(EPOLL_SIZE);
-	ep_events = (struct epoll_event*)malloc(sizeof(struct epoll_event)*EPOLL_SIZE);
+	ep_events = (struct epoll_event*)malloc( sizeof(struct epoll_event) * EPOLL_SIZE );
 
 	event.events = EPOLLIN;
 	event.data.fd = serv_sock;

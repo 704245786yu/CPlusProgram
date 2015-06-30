@@ -8,7 +8,7 @@ char buf[500000];
 void set_fl(int fd, int flags);
 void clr_fl(int fd, int flags);
 
-int main(void)
+int main1(void)
 {
 	int ntowrite, nwrite;
 	char *ptr;
