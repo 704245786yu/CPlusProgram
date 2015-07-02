@@ -7,15 +7,20 @@
 #include <sys/epoll.h>
 #include <fcntl.h>
 #include "Socket.h"
+#include "LoadProfile.h"
 
 #define BUF_SIZE 100
 #define EPOLL_SIZE 50
-#define SERV_PORT 8080
 
+static short termServPort;	//终端连结端口
+static short buzServPort;	//业务连接端口
+
+void getInitConf();	//根据配置文件设置termServPort buzServPort
 void clr_fl(int fd, int flags);
 
 int main(void)
 {
+	getInitConf();
 	int serv_sock, clnt_sock;
 	int str_len, i;
 	char buf[BUF_SIZE];
@@ -24,7 +29,7 @@ int main(void)
 	struct epoll_event event;
 	int epfd, event_cnt;
 
-	if( (serv_sock = initServSock(SERV_PORT)) == -1)
+	if( (serv_sock = initServSock(termServPort)) == -1)
 		return -1;
 
 	epfd = epoll_create1(0);
@@ -63,6 +68,17 @@ int main(void)
 	close(serv_sock);
 	close(epfd);
 	return 0;
+}
+
+void getInitConf(){
+	const char * const param[] = {"termServPort","buzServPort"};
+	int size = sizeof(param)/sizeof(char*);
+	char termPortStr[10] = {0};
+	char buzPortStr[10] = {0};
+	char *value[2] = {termPortStr, buzPortStr};
+	getConfigVal(param, value, size);
+	termServPort = atoi(termPortStr);
+	buzServPort = atoi(buzPortStr);
 }
 
 void clr_fl(int fd, int flags)
