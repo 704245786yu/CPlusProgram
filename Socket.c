@@ -29,6 +29,6 @@ int initServSock(short servPort)
 		perror("listen() error:");
 		return -1;
 	}
-	printf("Server start,wait for connect...\n");
+	printf("Service port :%d start,wait for connect...\n",servPort);
 	return listenfd;
 }
