@@ -4,29 +4,40 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
+#include <pthread.h>
 #include <sys/epoll.h>
 #include <fcntl.h>
 #include <sys/resource.h>
 #include "Socket.h"
 #include "LoadProfile.h"
+#include "bizService.h"
 
 #define BUF_SIZE 100
 #define EPOLL_SIZE 50
 
-static short termServPort;	//终端连结端口
 static short bizServPort;	//业务连接端口
+static short termServPort;	//终端连结端口
 
 static void getInitConf();	//根据配置文件设置termServPort buzServPort
 static void modifyRlimit(int resource, int rlim_cur, int rlim_max);	//修改进程的资源限制
-static void startBizThread();
+
 void clr_fl(int fd, int flags);
 
 int main(void)
 {
 	getInitConf();
 	modifyRlimit(RLIMIT_NOFILE, 50000, 50000);	//设置进行可打开的最大文件句柄数
-	startBizThread();
-
+	getBizServSock(bizServPort);
+	pthread_t biz_pid;
+	int err = pthread_create(&biz_pid, NULL, bizThreadRoutine, NULL);
+	if(err){
+		char* strErr = strerror(err);
+		fprintf(stderr,"create bizThreadRoutine error:%s\n",strErr);
+		return -1;
+	}
+	while(1);
+	perror("wc:");
+	/*
 	int serv_sock, clnt_sock;
 	int str_len, i;
 	char buf[BUF_SIZE];
@@ -72,10 +83,11 @@ int main(void)
 		}
 	}
 	close(serv_sock);
-	close(epfd);
+	close(epfd);	*/
 	return 0;
 }
 
+/*根据配置文件设置termServPort buzServPort*/
 static void getInitConf(){
 	const char * const param[] = {"termServPort","bizServPort"};
 	int size = sizeof(param)/sizeof(char*);
@@ -97,13 +109,6 @@ static void modifyRlimit(int resource, int rlim_cur, int rlim_max){
 		perror("setrlimit error:");
 		exit(-1);
 	}
-}
-
-static void startBizThread()
-{
-	int bizServSock;
-	if( (bizServSock = initServSock(termServPort)) == -1)
-			;
 }
 
 void clr_fl(int fd, int flags)
