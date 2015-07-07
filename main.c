@@ -27,6 +27,8 @@ int main(void)
 {
 	getInitConf();
 	modifyRlimit(RLIMIT_NOFILE, 50000, 50000);	//设置进行可打开的最大文件句柄数
+
+	//开启业务端口连接线程
 	getBizServSock(bizServPort);
 	pthread_t biz_pid;
 	int err = pthread_create(&biz_pid, NULL, bizThreadRoutine, NULL);
@@ -35,8 +37,8 @@ int main(void)
 		fprintf(stderr,"create bizThreadRoutine error:%s\n",strErr);
 		return -1;
 	}
-	while(1);
-	perror("wc:");
+
+	//开启epoll，进行终端连接
 	/*
 	int serv_sock, clnt_sock;
 	int str_len, i;
