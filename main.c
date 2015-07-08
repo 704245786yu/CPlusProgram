@@ -6,7 +6,6 @@
 #include <sys/socket.h>
 #include <pthread.h>
 #include <sys/epoll.h>
-#include <fcntl.h>
 #include <sys/resource.h>
 #include "Socket.h"
 #include "LoadProfile.h"
@@ -18,8 +17,6 @@ static short termServPort;	//终端连结端口
 
 static void getInitConf();	//根据配置文件设置termServPort buzServPort
 static void modifyRlimit(int resource, int rlim_cur, int rlim_max);	//修改进程的资源限制
-
-void clr_fl(int fd, int flags);
 
 int main(void)
 {
@@ -63,16 +60,4 @@ static void modifyRlimit(int resource, int rlim_cur, int rlim_max){
 		perror("setrlimit error:");
 		exit(-1);
 	}
-}
-
-void clr_fl(int fd, int flags)
-{
-	int flVal;
-	if( (flVal = fcntl(fd, F_GETFL, 0)) == -1 )
-		perror("fcntl F_GETFL error");
-
-	flVal &= ~flags; //turn flags off
-
-	if( fcntl(fd, F_SETFL, flVal) == -1 )
-		perror("fcntl F_SETFL error");
 }
