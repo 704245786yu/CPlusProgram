@@ -13,6 +13,7 @@
 static unsigned int thread_param[MAX_PTHREAD_NUM][3];//线程属性,0：标志线程是否空闲，1：标志线程序号，2：标志线程要处理的socket句柄
 static pthread_t tid[MAX_PTHREAD_NUM];//线程ID
 pthread_mutex_t thread_mutex[MAX_PTHREAD_NUM];//线程池互斥锁
+unsigned long concentrator[EPOLL_SIZE*2];	//存放集中器地址,sockfd作为下标
 
 void* pool_thread_handle(void *thread_para);//线程池处理函数
 
@@ -62,7 +63,10 @@ void* pool_thread_handle(void* thread_param)
 			i_thread_param[0] = 0;//线程空闲
 			continue;
 		}
-
+		printf("recv msg: %s\n", recvBuf);
+		if(recvlen==5){
+			//字节转long
+		}
 //		pthread_mutex_lock(&analysis_mutex);
 //		terminal_data_ana(buff,len,sock_cli);//数据解析
 //		pthread_mutex_unlock(&analysis_mutex);
@@ -82,59 +86,66 @@ void epollService(short termServPort)
 		exit(-1);
 	}
 
-	struct epoll_event event;
-	struct epoll_event ep_events[EPOLL_SIZE];
-	int epfd, event_cnt;
-
-	epfd = epoll_create1(0);
+	int epfd = epoll_create1(0);
 	if(epfd == -1){
 		perror("create epoll error:");
 		exit(-1);
 	}
 
+	struct epoll_event event;
 	event.events = EPOLLIN;
 	event.data.fd = termServSock;
 	if(epoll_ctl(epfd, EPOLL_CTL_ADD, termServSock, &event) == -1){
 		perror("add termServSock to epoll error:");
 		exit(-1);
 	}
-	printf("termServSock is waiting for connect\n");
+	printf("termServPort :%d is waiting for connect...\n",termServPort);
 
 	int i;	//for循环用
-
 	int clnt_sock;	//存放链接上来的客户端Socket句柄
-	while(1){
+	struct epoll_event ep_events[EPOLL_SIZE];	//存放epoll有事件发生时产生的event
+	int event_cnt;
+	while(1)
+	{
 		event_cnt = epoll_wait(epfd, ep_events, EPOLL_SIZE, -1);
-		if(event_cnt == -1){
+		if(event_cnt == -1)
+		{
 			puts("epoll_wait() error");
 			continue;
 		}
-
-		for(i=0; i<event_cnt; i++){
+		//循环处理发生输入事件的句柄
+		for(i=0; i<event_cnt; i++)
+		{
 			//服务端接收到新的连接
-			if(ep_events[i].data.fd == termServSock){
+			if(ep_events[i].data.fd == termServSock)
+			{
 				clnt_sock=accept(termServSock, NULL, NULL);
-				if(clnt_sock == -1){
+				if(clnt_sock == -1)
+				{
 					perror("termServSock accpet error:");
 					continue;
 				}
 				set_fl(clnt_sock, O_NONBLOCK); //设置成非阻塞
 				event.events = EPOLLIN | EPOLLET;
 				event.data.fd = clnt_sock;
-				if(epoll_ctl(epfd, EPOLL_CTL_ADD, clnt_sock, &event)==-1){
+				if(epoll_ctl(epfd, EPOLL_CTL_ADD, clnt_sock, &event)==-1)
+				{
 					perror("add clnt_sock to epoll error:");
 					exit(-1);
 				}
 				printf("connected client: %d \n",clnt_sock);
 			}else{
+				//处理客户端接收数据事件
 				int j;
 				//查找空闲线程
-				for(j = 0; j < MAX_PTHREAD_NUM; j++){
+				for(j = 0; j < MAX_PTHREAD_NUM; j++)
+				{
 				   if (thread_param[j][0] == 0)
 						break;
 				}
 				//没有找到空间线程处理，则关闭此次socekt链接
-				if (j >= MAX_PTHREAD_NUM){
+				if (j >= MAX_PTHREAD_NUM)
+				{
 //					fprintf(stderr, "pthread pool full\r\n");
 //					shutdown(events[n].data.fd, SHUT_RDWR);
 //					close(events[n].data.fd);

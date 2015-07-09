@@ -1,5 +1,4 @@
 #include <stdio.h>
-
 #include "fileCtrl.h"
 
 /*设置文件状态标志*/

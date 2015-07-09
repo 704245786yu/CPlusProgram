@@ -25,6 +25,7 @@ int main(void)
 
 	//开启业务端口连接线程
 	getBizServSock(bizServPort);
+	printf("bizServPort :%d is waiting for connect...\n",bizServPort);
 	pthread_t biz_pid;
 	int err = pthread_create(&biz_pid, NULL, bizThreadRoutine, NULL);
 	if(err){
@@ -49,8 +50,7 @@ static void getInitConf(){
 	termServPort = atoi(termPortStr);
 	bizServPort = atoi(bizPortStr);
 }
-/*修改进程的资源限制，失败则程序退出
- * */
+/*修改进程的资源限制，失败则程序退出*/
 static void modifyRlimit(int resource, int rlim_cur, int rlim_max){
 //	printf("max file:%d\n", sysconf(_SC_OPEN_MAX));
 	struct rlimit rlim;
