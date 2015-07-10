@@ -5,6 +5,7 @@
 #include "epollService.h"
 #include "Socket.h"
 #include "fileCtrl.h"
+#include "CodeTransform.h"
 
 #define RCEV_BUF_SIZE 4096
 #define EPOLL_SIZE 50
@@ -42,7 +43,7 @@ void* pool_thread_handle(void* thread_param)
 {
 	int * i_thread_param = (int*)thread_param;
    int clnt_sock;	//临时socket句柄
-   char recvBuf[RCEV_BUF_SIZE];	//接收缓存区
+   unsigned char recvBuf[RCEV_BUF_SIZE];	//接收缓存区
    int recvlen;	//接收数据长度
 
    //线程属性分离
@@ -64,8 +65,10 @@ void* pool_thread_handle(void* thread_param)
 			continue;
 		}
 		printf("recv msg: %s\n", recvBuf);
-		if(recvlen==5){
-			//字节转long
+		if(recvlen==5)
+			concentrator[clnt_sock]=bigEndian2long(recvBuf,recvlen);
+		else{
+
 		}
 //		pthread_mutex_lock(&analysis_mutex);
 //		terminal_data_ana(buff,len,sock_cli);//数据解析
