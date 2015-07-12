@@ -6,8 +6,10 @@
 #include "Socket.h"
 #include "fileCtrl.h"
 #include "CodeTransform.h"
+#include "ProtocolAnalysis.h"
 
 #define RCEV_BUF_SIZE 4096
+#define SEND_BUF_SIZE 4096
 #define EPOLL_SIZE 50
 #define MAX_PTHREAD_NUM 5		//线程池中线程数量
 
@@ -15,6 +17,7 @@ static unsigned int thread_param[MAX_PTHREAD_NUM][3];//线程属性,0：标志�
 static pthread_t tid[MAX_PTHREAD_NUM];//线程ID
 pthread_mutex_t thread_mutex[MAX_PTHREAD_NUM];//线程池互斥锁
 unsigned long concentrator[EPOLL_SIZE*2];	//存放集中器地址,sockfd作为下标
+extern int bizClntSock;
 
 void* pool_thread_handle(void *thread_para);//线程池处理函数
 
@@ -45,6 +48,9 @@ void* pool_thread_handle(void* thread_param)
    int clnt_sock;	//临时socket句柄
    unsigned char recvBuf[RCEV_BUF_SIZE];	//接收缓存区
    int recvlen;	//接收数据长度
+   int sendMaxLen = SEND_BUF_SIZE; //最大发送字节数
+   unsigned char sendBuf[SEND_BUF_SIZE];
+   int realSize;	//实际转换后的上海协议字节数
 
    //线程属性分离
    pthread_detach(pthread_self());
@@ -58,21 +64,28 @@ void* pool_thread_handle(void* thread_param)
 		memset(recvBuf,0,sizeof(recvBuf));
 		//接收终端发送的数据
 		recvlen = read(clnt_sock, recvBuf, sizeof(recvBuf));
-		if(recvlen <= 0){//接收失败则关闭socket链接
+		if(recvlen <= 0){
 			printf("epoll clnt_sock close\n");
 			close(clnt_sock);
 			i_thread_param[0] = 0;//线程空闲
 			continue;
 		}
-		printf("recv msg: %s\n", recvBuf);
-		if(recvlen==5)
+		if(recvlen==5){
+			//recvlen==5时表示注册包或心跳包
 			concentrator[clnt_sock]=bigEndian2long(recvBuf,recvlen);
-		else{
+		}else{
 
 		}
 //		pthread_mutex_lock(&analysis_mutex);
 //		terminal_data_ana(buff,len,sock_cli);//数据解析
 //		pthread_mutex_unlock(&analysis_mutex);
+		if(bizClntSock > 0){
+			memset(sendBuf, 0, sendMaxLen);
+			Sz2Sh(recvBuf, recvlen, 0xFF11, sendBuf, &realSize, sendMaxLen);
+			write(bizClntSock, sendBuf, realSize);
+		}else{
+			fprintf(stderr, "bizClntSock does't ready");
+		}
 		i_thread_param[0] = 0;//线程空闲
 	}
    pthread_exit(NULL);

@@ -16,12 +16,12 @@ static short bizServPort;	//业务连接端口
 static short termServPort;	//终端连结端口
 
 static void getInitConf();	//根据配置文件设置termServPort buzServPort
-static void modifyRlimit(int resource, int rlim_cur, int rlim_max);	//修改进程的资源限制
+//static void modifyRlimit(int resource, int rlim_cur, int rlim_max);	//修改进程的资源限制
 
 int main(void)
 {
 	getInitConf();
-	modifyRlimit(RLIMIT_NOFILE, 50000, 50000);	//设置进行可打开的最大文件句柄数
+//	modifyRlimit(RLIMIT_NOFILE, 50000, 50000);	//设置进行可打开的最大文件句柄数
 
 	//开启业务端口连接线程
 	getBizServSock(bizServPort);
@@ -50,7 +50,7 @@ static void getInitConf(){
 	termServPort = atoi(termPortStr);
 	bizServPort = atoi(bizPortStr);
 }
-/*修改进程的资源限制，失败则程序退出*/
+/*修改进程的资源限制，失败则程序退出
 static void modifyRlimit(int resource, int rlim_cur, int rlim_max){
 //	printf("max file:%d\n", sysconf(_SC_OPEN_MAX));
 	struct rlimit rlim;
@@ -60,4 +60,4 @@ static void modifyRlimit(int resource, int rlim_cur, int rlim_max){
 		perror("setrlimit error:");
 		exit(-1);
 	}
-}
+}*/

@@ -1,7 +1,7 @@
 #include "bizService.h"
 
 static int bizServSock;	//业务Server Socket
-static int bizClntSock;	//业务Client Socket
+int bizClntSock = -1;	//业务Client Socket
 
 /*开启业务Server端口*/
 void getBizServSock(short bizServPort)
@@ -53,7 +53,7 @@ void* bizThreadRoutine(void* arg)
 
 	printf("biz clnt:%d connected\n",bizClntSock);
 
-	pthread_t recv_pid, send_pid1, send_pid2;
+	pthread_t recv_pid;
 	int err;
 	err = pthread_create(&recv_pid, NULL, recv_thread_routine, NULL);
 	if(err){
