@@ -23,14 +23,18 @@ int main(void)
 	getInitConf();
 //	modifyRlimit(RLIMIT_NOFILE, 50000, 50000);	//设置进行可打开的最大文件句柄数
 
-	//开启业务端口连接线程
-	getBizServSock(bizServPort);
+	//开启业务网关连接端口
+	int bizServSock = initServSock(bizServPort);
+	if(bizServSock == -1){
+		fprintf(stderr,"open bizServSock failure\n");
+		return -1;
+	}
 	printf("bizServPort :%d is waiting for connect...\n",bizServPort);
+	//创建业务网关处理线程
 	pthread_t biz_pid;
-	int err = pthread_create(&biz_pid, NULL, bizThreadRoutine, NULL);
+	int err = pthread_create(&biz_pid, NULL, bizThreadRoutine, &bizServSock);
 	if(err){
-		char* strErr = strerror(err);
-		fprintf(stderr,"create bizThreadRoutine error:%s\n",strErr);
+		fprintf(stderr,"create bizThreadRoutine error:%s\n",strerror(err));
 		return -1;
 	}
 

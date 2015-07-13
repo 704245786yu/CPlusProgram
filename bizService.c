@@ -1,29 +1,38 @@
 #include "bizService.h"
 
 static int bizServSock;	//业务Server Socket
-int bizClntSock = -1;	//业务Client Socket
+int bizClntSock = -1;	//业务Client Socket，若为-1表示bizClntSock未准备好，需要等待业务网关连接
 
-/*开启业务Server端口*/
-void getBizServSock(short bizServPort)
+/*业务线程程序,等待业务网关连接，获得业务端口后*/
+void* bizThreadRoutine(void* arg)
 {
-	bizServSock = initServSock(bizServPort);
-	if(bizServSock == -1)
-	{
-		perror("open bizServPort error:");
-		exit(-1);
-	}
-}
+	bizServSock = *(int*)arg;
+	while( (bizClntSock= accept(bizServSock, NULL, NULL)) == -1 )
+		perror("accept bizClntSock error:");
+	printf("biz client socket:%d connected\n",bizClntSock);
 
-/*接收业务网关数据线程执行例程*/
-static void* recv_thread_routine(void *arg)
-{
 	char recvbuf[MAX_RECVBUFF] = {0};
 	int recvlen;
-	while( (recvlen = read(bizClntSock, recvbuf, MAX_RECVBUFF)) > 0){
-
+	while(1)
+	{
 		memset(recvbuf, 0, MAX_RECVBUFF);
+		recvlen = read(bizClntSock, recvbuf, MAX_RECVBUFF);
+		if(recvlen <= 0)
+		{
+			//关闭旧biz client socket，并重新连接
+			perror("read biz client socket error:");
+			close(bizClntSock);
+			bizClntSock = -1;	//表示bizClntSock不可用
+			printf("close biz client socket, accept a new client socket\n");
+			while( (bizClntSock= accept(bizServSock, NULL, NULL)) == -1 )
+				perror("accept bizClntSock error:");
+			printf("biz client socket:%d connected\n",bizClntSock);
+		}else{
+			//解析读取到的数据
+
+		}
 	}
-	return NULL;
+	pthread_exit(NULL);
 }
 
 /*发送业务网关数据线程执行例程
@@ -44,30 +53,3 @@ static void* send_thread_routine(void *arg)
 	perror("send error:");
 	return NULL;
 }*/
-
-/*业务线程程序,开启业务网关读、写线程*/
-void* bizThreadRoutine(void* arg)
-{
-	while( (bizClntSock= accept(bizServSock, NULL, NULL)) == -1 )
-		perror("accept bizClntSock error:");
-
-	printf("biz clnt:%d connected\n",bizClntSock);
-
-	pthread_t recv_pid;
-	int err;
-	err = pthread_create(&recv_pid, NULL, recv_thread_routine, NULL);
-	if(err){
-		char* strErr = strerror(err);
-		fprintf(stderr,"create biz recv_thread_routine error:%s\n",strErr);
-		exit(-1);
-	}
-
-//	char a = 'a';
-//	err = pthread_create(&send_pid1, NULL, send_thread_routine, &a);
-//	if(err){
-//		char* strErr = strerror(err);
-//		fprintf(stderr,"create biz send_thread_routine error:%s\n",strErr);
-//		exit(-1);
-//	}
-	pthread_exit(NULL);
-}
