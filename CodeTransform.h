@@ -3,6 +3,8 @@
 
 /*大字端转long*/
 long bigEndian2long(const unsigned char buf[],int len);
+/*大字端转int*/
+int bigEndian2int(const unsigned char buf[],int len);
 /*按16进制打印字节数组*/
 void printHexBytes(char prompt[], unsigned char bytes[], int len);
 #endif /* CODETRANSFORM_H_ */

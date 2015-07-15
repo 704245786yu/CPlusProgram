@@ -18,9 +18,42 @@ static unsigned short crc16(unsigned char *ptr, unsigned char len);
  * @len 协议长度
  * @shCmd 上海协议命令码
  * */
-void Sz2Sh(unsigned char source[], int sourceLen, unsigned short shCmd,
-		unsigned char target[], int *size, int maxLen)
+void Sz2Sh(long concentrator, unsigned char source[], int sourceLen, unsigned char target[], int *size, int maxLen)
 {
+	unsigned short shCmd = 0;
+	if(sourceLen == 5)	//注册包或心跳包
+		shCmd = 0xFF11;
+	else{
+		switch(source[0]){
+		case 0x11:
+			switch(source[1]){
+			case 0x1D:	//终端(灯控器)发送数据格式
+				shCmd = 0xFF21;
+				break;
+			case 0x0A:	//回路查询响应帧，控制指令响应帧
+				shCmd = 0xFF31;
+				break;
+			case 0x35:	//3相电查询响应帧
+				shCmd = 0xFF33;
+				break;
+			}
+			break;
+		case 0x20:	//集中管理器配置
+			switch(source[2]){
+			case 0x15:	//读取网关本地时间响应帧
+				shCmd = 0xFF34;
+				break;
+			case 0x1F:	//读取策略时间响应帧
+				shCmd = 0xFF35;
+				break;
+			case 0x19:	//读取经纬度响应帧
+				shCmd = 0xFF36;
+				break;
+			}
+			break;
+		}
+	}
+
 	struct shProtocal frame;	//上海协议数据帧
 	memset(&frame, 0, sizeof(struct shProtocal));
 	frame.head = 0xAA;

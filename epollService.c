@@ -16,80 +16,17 @@
 static unsigned int thread_param[MAX_PTHREAD_NUM][3];//线程属性,0：标志线程是否空闲，1：标志线程序号，2：标志线程要处理的socket句柄
 static pthread_t tid[MAX_PTHREAD_NUM];//线程ID
 pthread_mutex_t thread_mutex[MAX_PTHREAD_NUM];//线程池互斥锁
-unsigned long concentrator[EPOLL_SIZE*2];	//存放集中器地址,sockfd作为下标
+int concentratorsSize = EPOLL_SIZE*2;
+unsigned long concentrators[EPOLL_SIZE*2];	//存放集中器地址,sockfd作为下标
 extern int bizClntSock;
 
-void* pool_thread_handle(void *thread_para);//线程池处理函数
-
 /*初始化线程池和线程池互斥锁*/
-static void init_pthread_pool(){
-	int i;
-	for(i = 0; i < MAX_PTHREAD_NUM; i++) {
-		thread_param[i][0] = 0;//线程空闲
-		thread_param[i][1] = i;//线程索引
-		pthread_mutex_lock(thread_mutex + i);//对应线程锁
-	}
-	int res;
-	for(i = 0; i < MAX_PTHREAD_NUM; i++) {
-		res = pthread_create(tid+i, NULL, pool_thread_handle, thread_param[i]);
-		if (0 != res){
-			fprintf(stderr, "create pthread in thread pool error:%s\n",strerror(res));
-			exit(-1);
-		}
-   }
-}
-
+static void init_pthread_pool();
 /*线程池处理函数
  * @thread_para[] 线程信息
  * */
-void* pool_thread_handle(void* thread_param)
-{
-	int * i_thread_param = (int*)thread_param;
-   int clnt_sock;	//临时socket句柄
-   unsigned char recvBuf[RCEV_BUF_SIZE];	//接收缓存区
-   int recvlen;	//接收数据长度
-   int sendMaxLen = SEND_BUF_SIZE; //最大发送字节数
-   unsigned char sendBuf[SEND_BUF_SIZE];
-   int realSize;	//实际转换后的上海协议字节数
+static void* pool_thread_handle(void *thread_para);//线程池处理函数
 
-   //线程属性分离
-   pthread_detach(pthread_self());
-   int thread_index = i_thread_param[1]; //获取线程索引，以找到对应的互斥锁
-
-	while(1)
-	{
-		pthread_mutex_lock(thread_mutex + thread_index);//加锁，没有数据接收时睡眠线程
-		clnt_sock = i_thread_param[2];//socket 句柄
-
-		memset(recvBuf,0,sizeof(recvBuf));
-		//接收终端发送的数据
-		recvlen = read(clnt_sock, recvBuf, sizeof(recvBuf));
-		if(recvlen <= 0){
-			printf("epoll clnt_sock close\n");
-			close(clnt_sock);
-			i_thread_param[0] = 0;//线程空闲
-			continue;
-		}
-		if(recvlen==5){
-			//recvlen==5时表示注册包或心跳包
-			concentrator[clnt_sock]=bigEndian2long(recvBuf,recvlen);
-		}else{
-
-		}
-//		pthread_mutex_lock(&analysis_mutex);
-//		terminal_data_ana(buff,len,sock_cli);//数据解析
-//		pthread_mutex_unlock(&analysis_mutex);
-		if(bizClntSock > 0){
-			memset(sendBuf, 0, sendMaxLen);
-			Sz2Sh(recvBuf, recvlen, 0xFF11, sendBuf, &realSize, sendMaxLen);
-			write(bizClntSock, sendBuf, realSize);
-		}else{
-			fprintf(stderr, "bizClntSock does't ready");
-		}
-		i_thread_param[0] = 0;//线程空闲
-	}
-   pthread_exit(NULL);
-}
 
 void epollService(short termServPort)
 {
@@ -126,7 +63,7 @@ void epollService(short termServPort)
 		event_cnt = epoll_wait(epfd, ep_events, EPOLL_SIZE, -1);
 		if(event_cnt == -1)
 		{
-			puts("epoll_wait() error");
+			perror("epoll_wait() error:");
 			continue;
 		}
 		//循环处理发生输入事件的句柄
@@ -149,7 +86,7 @@ void epollService(short termServPort)
 					perror("add clnt_sock to epoll error:");
 					exit(-1);
 				}
-				printf("connected client: %d \n",clnt_sock);
+				printf("a client connect up epoll: %d success\n",clnt_sock);
 			}else{
 				//处理客户端接收数据事件
 				int j;
@@ -179,4 +116,73 @@ void epollService(short termServPort)
 	}
 	close(termServSock);
 	close(epfd);
+}
+
+/*初始化线程池和线程池互斥锁*/
+static void init_pthread_pool(){
+	int i;
+	for(i = 0; i < MAX_PTHREAD_NUM; i++) {
+		thread_param[i][0] = 0;//线程空闲
+		thread_param[i][1] = i;//线程索引
+		pthread_mutex_lock(thread_mutex + i);//对应线程锁
+	}
+	int res;
+	for(i = 0; i < MAX_PTHREAD_NUM; i++) {
+		res = pthread_create(tid+i, NULL, pool_thread_handle, thread_param[i]);
+		if (0 != res){
+			fprintf(stderr, "create pthread in thread pool error:%s\n",strerror(res));
+			exit(-1);
+		}
+   }
+}
+
+/*线程池处理函数
+ * @thread_para[] 线程信息
+ * */
+static void* pool_thread_handle(void* thread_param)
+{
+	int * i_thread_param = (int*)thread_param;
+   int clnt_sock;	//临时socket句柄
+   unsigned char recvBuf[RCEV_BUF_SIZE];	//接收缓存区
+   int recvlen;	//接收数据长度
+   int sendMaxLen = SEND_BUF_SIZE; //最大发送字节数
+   unsigned char sendBuf[SEND_BUF_SIZE];
+   int realSize;	//实际转换后的上海协议字节数
+
+   //线程属性分离
+   pthread_detach(pthread_self());
+   int thread_index = i_thread_param[1]; //获取线程索引，以找到对应的互斥锁
+
+	while(1)
+	{
+		pthread_mutex_lock(thread_mutex + thread_index);//加锁，没有数据接收时睡眠线程
+		clnt_sock = i_thread_param[2];//socket 句柄
+
+		memset(recvBuf,0,sizeof(recvBuf));
+		//接收终端发送的数据
+		recvlen = read(clnt_sock, recvBuf, sizeof(recvBuf));
+		if(recvlen <= 0){
+			printf("epoll clnt_sock close\n");
+			close(clnt_sock);
+			i_thread_param[0] = 0;//线程空闲
+			continue;
+		}
+		if(recvlen==5){
+			//recvlen==5时表示注册包或心跳包
+			concentrators[clnt_sock]=bigEndian2long(recvBuf,recvlen);
+//			printf("scoket:%d, concentrator:%ld login\n", clnt_sock, concentrators[clnt_sock]);
+		}
+		memset(sendBuf, 0, sendMaxLen);
+		Sz2Sh(recvBuf, recvlen, sendBuf, &realSize, sendMaxLen);
+//		pthread_mutex_lock(&analysis_mutex);
+//		terminal_data_ana(buff,len,sock_cli);//数据解析
+//		pthread_mutex_unlock(&analysis_mutex);
+		if(bizClntSock > 0){
+			write(bizClntSock, sendBuf, realSize);
+		}else{
+			fprintf(stderr, "bizClntSock does't ready");
+		}
+		i_thread_param[0] = 0;//线程空闲
+	}
+   pthread_exit(NULL);
 }

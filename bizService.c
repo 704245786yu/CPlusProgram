@@ -1,7 +1,13 @@
 #include "bizService.h"
+#include "CodeTransform.h"
 
 static int bizServSock;	//业务Server Socket
 int bizClntSock = -1;	//业务Client Socket，若为-1表示bizClntSock未准备好，需要等待业务网关连接
+
+/*解包
+ * @return lastIndex 最后未成功解析的帧头位置
+ * */
+static int unpack(unsigned char recvbuf[], int buflen);
 
 /*业务线程程序,等待业务网关连接，获得业务端口后*/
 void* bizThreadRoutine(void* arg)
@@ -11,12 +17,13 @@ void* bizThreadRoutine(void* arg)
 		perror("accept bizClntSock error:");
 	printf("biz client socket:%d connected\n",bizClntSock);
 
-	char recvbuf[MAX_RECVBUFF] = {0};
+	unsigned char recvbuf[MAX_RECVBUFF] = {0};
 	int recvlen;
+	int offset = 0;	//redvbuf的偏移量，偏移量之前的内容为上次解析剩下的包
 	while(1)
 	{
-		memset(recvbuf, 0, MAX_RECVBUFF);
-		recvlen = read(bizClntSock, recvbuf, MAX_RECVBUFF);
+		memset(recvbuf+offset, 0, MAX_RECVBUFF-offset);
+		recvlen = read(bizClntSock, recvbuf+offset, MAX_RECVBUFF-offset);
 		if(recvlen <= 0)
 		{
 			//关闭旧biz client socket，并重新连接
@@ -29,10 +36,59 @@ void* bizThreadRoutine(void* arg)
 			printf("biz client socket:%d connected\n",bizClntSock);
 		}else{
 			//解析读取到的数据
-
+			int buflen = recvlen + offset;
+			printHexBytes("recv:",recvbuf, buflen);
+			int lastIndex = unpack(recvbuf, buflen);
+			if(lastIndex == buflen){
+				printf("all uppack\n");
+				offset = 0;
+			}else{
+				printf("not all uppack\n");
+				offset = buflen-lastIndex;
+				memmove(recvbuf, recvbuf+lastIndex, offset);
+			}
 		}
 	}
 	pthread_exit(NULL);
+}
+
+/*解包
+ * @return lastIndex 最后未成功解析的帧头位置
+ * */
+extern int concentratorsSize;
+extern unsigned long concentrators[];
+static int unpack(unsigned char recvbuf[], int buflen)
+{
+	int i;
+	int term_sockfd;	//concentrators的下标对应相应的终端socketfd
+	int lastIndex = 0; //最后未成功解析的帧头位置
+	for(i=0; i<buflen; i++)
+	{
+		if(recvbuf[i] == 0xAA)
+		{
+			//帧起始符为0xAA的同时，要保证帧结束符为0x55
+			int datalen = bigEndian2int(recvbuf+i+12, 4);
+			int tail = i + 16 + datalen + 2;	//帧结束符位置
+			if(recvbuf[tail] == 0x55)
+			{
+				unsigned long concentrator = bigEndian2long(recvbuf+i+1,8);
+				//寻找concentrator对应的socket
+				for(term_sockfd=0; term_sockfd<concentratorsSize; term_sockfd++)
+				{
+					if(concentrators[term_sockfd] == concentrator){
+						if(send(term_sockfd, recvbuf+i+16, datalen, MSG_NOSIGNAL) <= 0)	//发送数据到终端
+							fprintf(stderr, "send to epoll client socket %d failed!\n", term_sockfd);
+						else
+							printf("send to epoll client socket fd:%d success\n",term_sockfd);
+						break;
+					}
+				}
+				i = tail;
+				lastIndex = tail+1;
+			}
+		}
+	}
+	return lastIndex;
 }
 
 /*发送业务网关数据线程执行例程

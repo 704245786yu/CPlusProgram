@@ -22,9 +22,7 @@ struct shProtocal{
 /*顺舟转上海协议
  * @buf[] 顺舟协议
  * @len 协议长度
- * @shCmd 上海协议命令码
  * */
-void Sz2Sh(unsigned char source[], int sourceLen, unsigned short shCmd,
-		unsigned char target[], int *size, int maxLen);
+void Sz2Sh(unsigned char source[], int sourceLen, unsigned char target[], int *size, int maxLen);
 
 #endif /* PROTOCALANALYSIS_H_ */

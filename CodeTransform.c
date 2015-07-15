@@ -14,6 +14,18 @@ long bigEndian2long(const unsigned char buf[],int len)
 	return res;
 }
 
+/*大字端转int*/
+int bigEndian2int(const unsigned char buf[],int len)
+{
+	int res = 0;
+	int i;
+	for(i=0;i<len;i++)
+	{
+		res = res<< 8 | buf[i];
+	}
+	return res;
+}
+
 void printHexBytes(char prompt[], unsigned char bytes[], int len)
 {
 	int i=0;
