@@ -30,7 +30,7 @@ void Sz2Sh(long concentrator, unsigned char source[], int sourceLen, unsigned ch
 			case 0x1D:	//终端(灯控器)发送数据格式
 				shCmd = 0xFF21;
 				break;
-			case 0x0A:	//回路查询响应帧，控制指令响应帧
+			case 0x0A:	//回路查询响应帧 和 控制指令响应帧
 				shCmd = 0xFF31;
 				break;
 			case 0x35:	//3相电查询响应帧

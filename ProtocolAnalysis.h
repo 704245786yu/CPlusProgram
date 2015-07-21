@@ -5,7 +5,10 @@
 struct shProtocal{
 	unsigned char head;	//帧起始符，固定值为0xAA
 	unsigned char concentrator[8];	//集中控制器地址，实际存放注册包
+	unsigned char deviceAddr[8];	//设备地址，默认全0
+	unsigned char sourceAddr[8];	//操作源地址，默认全0
 	unsigned char cmd[2];	//命令码
+	unsigned char sn[2];	//流水号，默认全0
 	unsigned char answerCode;	//响应码，默认为0
 	union{
 		int len;
