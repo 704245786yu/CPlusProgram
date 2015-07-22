@@ -14,12 +14,16 @@ static unsigned short crc16(unsigned char *ptr, unsigned char len);
 
 //{0xDC, 0x41, 0x22, 0x34, 0xCE}
 /*顺舟转上海协议
- * @buf[] 顺舟协议
- * @len 协议长度
- * @shCmd 上海协议命令码
+ * @concentrator 集中器地址
+ * @source[] 顺舟协议
+ * @sourceLen 顺舟协议长度
+ * @target[] 传出参数，转换后的上海协议
+ * @*targetSize 传出参数，转换后的上海协议长度
  * */
-void Sz2Sh(long concentrator, unsigned char source[], int sourceLen, unsigned char target[], int *size, int maxLen)
+void Sz2Sh(unsigned long concentrator, unsigned char source[], int sourceLen,
+		unsigned char target[], int *targetSize)
 {
+	//设置上海协议的命令码
 	unsigned short shCmd = 0;
 	if(sourceLen == 5)	//注册包或心跳包
 		shCmd = 0xFF11;
@@ -54,35 +58,28 @@ void Sz2Sh(long concentrator, unsigned char source[], int sourceLen, unsigned ch
 		}
 	}
 
+	//封装上海协议
 	struct shProtocal frame;	//上海协议数据帧
 	memset(&frame, 0, sizeof(struct shProtocal));
 	frame.head = 0xAA;
+	long2bigEndian(frame.concentrator, concentrator);
+	frame.cmd_u.cmd = htons(shCmd);
+	frame.length_u.len = htonl(sourceLen);
+	frame.pData = source;
+//	printf("s:%d e:%d\n", sourceLen, frame.length_u.len);
 
-	switch (shCmd) {
-		case 0xFF11:	//注册包
-			memcpy(frame.concentrator+3, source,sourceLen);
-			frame.cmd[0]=0xFF;
-			frame.cmd[1]=0x11;
-			frame.answerCode = 0;
-			frame.length_u.len = htonl(sourceLen);
-//			printf("s:%d e:%d\n", sourceLen, frame.length_u.len);
-			frame.pData = source;
-			break;
-		default:
-			break;
-	}
+	//封装上海协议帧
 	target[0] = frame.head;
 	memcpy(target+1, frame.concentrator, 8);
-	memcpy(target+9, frame.cmd, 2);
-	target[11] = frame.answerCode;
-	memcpy(target+12, frame.length_u.lenBytes, 4);
-	memcpy(target+16, frame.pData, 5);
+	memcpy(target+25, frame.cmd_u.cmdBytes, 2);
+	memcpy(target+30, frame.length_u.lenBytes, 4);
+	memcpy(target+34, frame.pData, sourceLen);
 	//获取CRC16校验码
-	frame.checkCode_u.checkCode = htons(crc16(target, 16+5));
+	frame.checkCode_u.checkCode = htons(crc16(target, 34+sourceLen));
 	frame.tail = 0x55;
-	memcpy(target+16+5, frame.checkCode_u.checkCodeBytes, 2);
-	target[16+5+2] = frame.tail;
-	*size = 16+5+2+1;
+	memcpy(target+34+sourceLen, frame.checkCode_u.checkCodeBytes, 2);
+	target[34+sourceLen+2] = frame.tail;
+	*targetSize = 34+sourceLen+3;
 }
 
 /*美标CRC16算法*/

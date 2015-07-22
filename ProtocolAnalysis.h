@@ -7,7 +7,10 @@ struct shProtocal{
 	unsigned char concentrator[8];	//集中控制器地址，实际存放注册包
 	unsigned char deviceAddr[8];	//设备地址，默认全0
 	unsigned char sourceAddr[8];	//操作源地址，默认全0
-	unsigned char cmd[2];	//命令码
+	union{
+		unsigned short cmd;
+		unsigned char cmdBytes[2];
+	} cmd_u;	//命令码
 	unsigned char sn[2];	//流水号，默认全0
 	unsigned char answerCode;	//响应码，默认为0
 	union{
@@ -26,6 +29,7 @@ struct shProtocal{
  * @buf[] 顺舟协议
  * @len 协议长度
  * */
-void Sz2Sh(unsigned char source[], int sourceLen, unsigned char target[], int *size, int maxLen);
+void Sz2Sh(unsigned long concentrator, unsigned char source[], int sourceLen,
+		unsigned char target[], int *targetSize);
 
 #endif /* PROTOCALANALYSIS_H_ */

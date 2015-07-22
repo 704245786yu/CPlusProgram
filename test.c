@@ -4,13 +4,15 @@
 #include <netinet/in.h>
 
 void testBigEndian2long();
+void testLong2bigEndian();
 void testSz2Sh();
 void testEndian();
 
 int main1(void)
 {
-	testSz2Sh();
+//	testSz2Sh();
 //	testEndian();
+	testLong2bigEndian();
 	return 0;
 }
 
@@ -18,6 +20,14 @@ void testBigEndian2long()
 {
 	unsigned char a[]={0xDC, 0x41, 0x22, 0x34, 0xCE};
 	printf("%ld\n",bigEndian2long(a,5));
+}
+
+void testLong2bigEndian()
+{
+	unsigned long val = 945985565902;
+	unsigned char buf[8]={0};
+	long2bigEndian(buf,val);
+	printHexBytes("buf:",buf, 8);
 }
 
 void testSz2Sh()

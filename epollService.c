@@ -145,7 +145,6 @@ static void* pool_thread_handle(void* thread_param)
    int clnt_sock;	//临时socket句柄
    unsigned char recvBuf[RCEV_BUF_SIZE];	//接收缓存区
    int recvlen;	//接收数据长度
-   int sendMaxLen = SEND_BUF_SIZE; //最大发送字节数
    unsigned char sendBuf[SEND_BUF_SIZE];
    int realSize;	//实际转换后的上海协议字节数
 
@@ -167,13 +166,12 @@ static void* pool_thread_handle(void* thread_param)
 			i_thread_param[0] = 0;//线程空闲
 			continue;
 		}
-		if(recvlen==5){
-			//recvlen==5时表示注册包或心跳包
+		if(recvlen==5){	//recvlen==5时表示注册包或心跳包，注册包和心跳包都为集中器地址
 			concentrators[clnt_sock]=bigEndian2long(recvBuf,recvlen);
 //			printf("scoket:%d, concentrator:%ld login\n", clnt_sock, concentrators[clnt_sock]);
 		}
-		memset(sendBuf, 0, sendMaxLen);
-		Sz2Sh(recvBuf, recvlen, sendBuf, &realSize, sendMaxLen);
+		memset(sendBuf, 0, SEND_BUF_SIZE);
+		Sz2Sh(concentrators[clnt_sock], recvBuf, recvlen, sendBuf, &realSize);
 //		pthread_mutex_lock(&analysis_mutex);
 //		terminal_data_ana(buff,len,sock_cli);//数据解析
 //		pthread_mutex_unlock(&analysis_mutex);

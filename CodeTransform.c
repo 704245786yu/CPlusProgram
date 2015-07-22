@@ -14,6 +14,15 @@ long bigEndian2long(const unsigned char buf[],int len)
 	return res;
 }
 
+/*long转大字端*/
+void long2bigEndian(unsigned char *const destBuf, unsigned long val)
+{
+	int i;
+	for(i=0; i<8; i++){
+		destBuf[i] = val >> 8*(7-i) & 0xFF;
+	}
+}
+
 /*大字端转int*/
 int bigEndian2int(const unsigned char buf[],int len)
 {
