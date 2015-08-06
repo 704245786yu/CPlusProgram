@@ -2,6 +2,8 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <sys/epoll.h>
+#include <errno.h>
+#include <sys/time.h>
 #include "epollService.h"
 #include "Socket.h"
 #include "fileCtrl.h"
@@ -10,8 +12,8 @@
 
 #define RCEV_BUF_SIZE 4096
 #define SEND_BUF_SIZE 4096
-#define EPOLL_SIZE 50
-#define MAX_PTHREAD_NUM 5		//线程池中线程数量
+#define EPOLL_SIZE 11000
+#define MAX_PTHREAD_NUM 20		//线程池中线程数量
 
 static unsigned int thread_param[MAX_PTHREAD_NUM][3];//线程属性,0：标志线程是否空闲，1：标志线程序号，2：标志线程要处理的socket句柄
 static pthread_t tid[MAX_PTHREAD_NUM];//线程ID
@@ -44,6 +46,7 @@ void epollService(short termServPort)
 		perror("create epoll error:");
 		exit(-1);
 	}
+	printf("epoll fd:%d\n", epfd);
 
 	struct epoll_event event;
 	event.events = EPOLLIN;
@@ -52,7 +55,7 @@ void epollService(short termServPort)
 		perror("add termServSock to epoll error:");
 		exit(-1);
 	}
-	printf("termServPort :%d is waiting for connect...\n",termServPort);
+	printf("termServSock:%d, termServPort:%d is waiting for connect...\n",termServSock, termServPort);
 
 	int i;	//for循环用
 	int clnt_sock;	//存放链接上来的客户端Socket句柄
@@ -86,7 +89,7 @@ void epollService(short termServPort)
 					perror("add clnt_sock to epoll error:");
 					exit(-1);
 				}
-				printf("a client connect up epoll: %d success\n",clnt_sock);
+				printf("a term clnt_sock:%d connected\n",clnt_sock);
 			}else{
 				//处理客户端接收数据事件
 				int j;
@@ -96,7 +99,7 @@ void epollService(short termServPort)
 				   if (thread_param[j][0] == 0)
 						break;
 				}
-				//没有找到空间线程处理，则关闭此次socekt链接
+				//没有找到空闲线程处理，则关闭此次socekt链接
 				if (j >= MAX_PTHREAD_NUM)
 				{
 //					fprintf(stderr, "pthread pool full\r\n");
@@ -104,12 +107,12 @@ void epollService(short termServPort)
 //					close(events[n].data.fd);
 
 					//myself
-					printf("can't find free epoll thread\n");
+					fprintf(stderr, "can't find free epoll thread\n");
 					continue;
 				}
 				//找到空闲线程，解锁处理数据
 			   thread_param[j][0] = 1;//线程忙
-			   thread_param[j][2] = ep_events[j].data.fd;//socket句柄
+			   thread_param[j][2] = ep_events[i].data.fd;//socket句柄
 			   pthread_mutex_unlock(thread_mutex + j);//解锁睡眠锁
 			}
 		}
@@ -127,8 +130,13 @@ static void init_pthread_pool(){
 		pthread_mutex_lock(thread_mutex + i);//对应线程锁
 	}
 	int res;
+	pthread_attr_t attr;
+	pthread_attr_init(&attr);
+//	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+	pthread_attr_setscope(&attr, PTHREAD_SCOPE_SYSTEM);
+
 	for(i = 0; i < MAX_PTHREAD_NUM; i++) {
-		res = pthread_create(tid+i, NULL, pool_thread_handle, thread_param[i]);
+		res = pthread_create(tid+i, &attr, pool_thread_handle, thread_param[i]);
 		if (0 != res){
 			fprintf(stderr, "create pthread in thread pool error:%s\n",strerror(res));
 			exit(-1);
@@ -146,41 +154,59 @@ static void* pool_thread_handle(void* thread_param)
    unsigned char recvBuf[RCEV_BUF_SIZE];	//接收缓存区
    int recvlen;	//接收数据长度
    unsigned char sendBuf[SEND_BUF_SIZE];
-   int realSize;	//实际转换后的上海协议字节数
+   int shSize;	//实际转换后的上海协议字节数
 
    //线程属性分离
-   pthread_detach(pthread_self());
+//   pthread_detach(pthread_self());
    int thread_index = i_thread_param[1]; //获取线程索引，以找到对应的互斥锁
 
 	while(1)
 	{
 		pthread_mutex_lock(thread_mutex + thread_index);//加锁，没有数据接收时睡眠线程
-		clnt_sock = i_thread_param[2];//socket 句柄
 
+		struct timeval t_start;
+		gettimeofday(&t_start,NULL);
+
+		clnt_sock = i_thread_param[2];//socket 句柄
 		memset(recvBuf,0,sizeof(recvBuf));
 		//接收终端发送的数据
-		recvlen = read(clnt_sock, recvBuf, sizeof(recvBuf));
+		recvlen = recv(clnt_sock, recvBuf, sizeof(recvBuf), MSG_NOSIGNAL);
 		if(recvlen <= 0){
-			printf("epoll clnt_sock close\n");
-			close(clnt_sock);
-			i_thread_param[0] = 0;//线程空闲
-			continue;
+			if(recvlen == -1 && errno == EAGAIN)
+				continue;
+			else{
+				fprintf(stderr, "recv epoll term fd:%d error %d:%s, close clnt_sock\n",clnt_sock,errno,strerror(errno));
+				close(clnt_sock);
+				i_thread_param[0] = 0;//线程空闲
+				continue;
+			}
 		}
 		if(recvlen==5){	//recvlen==5时表示注册包或心跳包，注册包和心跳包都为集中器地址
 			concentrators[clnt_sock]=bigEndian2long(recvBuf,recvlen);
 //			printf("scoket:%d, concentrator:%ld login\n", clnt_sock, concentrators[clnt_sock]);
 		}
 		memset(sendBuf, 0, SEND_BUF_SIZE);
-		Sz2Sh(concentrators[clnt_sock], recvBuf, recvlen, sendBuf, &realSize);
-//		pthread_mutex_lock(&analysis_mutex);
-//		terminal_data_ana(buff,len,sock_cli);//数据解析
-//		pthread_mutex_unlock(&analysis_mutex);
-		if(bizClntSock > 0){
-			write(bizClntSock, sendBuf, realSize);
+		Sz2Sh(concentrators[clnt_sock], recvBuf, recvlen, sendBuf, &shSize);
+
+		struct timeval t_mid;
+		gettimeofday(&t_mid,NULL);
+		printf("mid:%ld\n", t_mid.tv_usec - t_start.tv_usec);
+
+		if(bizClntSock > 0 && shSize!=0){
+//			if(send(clnt_sock, sendBuf, shSize, MSG_NOSIGNAL) == -1)
+//				fprintf(stderr, "echo clnt error %d:%s\n,",errno, strerror(errno));
+//			if(send(bizClntSock, sendBuf, shSize, MSG_DONTWAIT) == -1)
+//				fprintf(stderr, "send to biz error %d:%s\n,",errno, strerror(errno));
 		}else{
-			fprintf(stderr, "bizClntSock does't ready");
+			fprintf(stderr, "didn't send to bizClntSock:%d, shSize:%d, recvlen:%d\n",bizClntSock,shSize,recvlen);
+//			printHexBytes("recv:",recvBuf,recvlen);
 		}
 		i_thread_param[0] = 0;//线程空闲
+
+		struct timeval t_end;
+		gettimeofday(&t_end,NULL);
+
+		printf("end-mid:%ld\n", t_end.tv_usec - t_mid.tv_usec);
 	}
    pthread_exit(NULL);
 }
