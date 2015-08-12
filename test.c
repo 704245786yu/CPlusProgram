@@ -7,12 +7,14 @@ void testBigEndian2long();
 void testLong2bigEndian();
 void testSz2Sh();
 void testEndian();
+void testBinarayInsert();
 
 int main1(void)
 {
 //	testSz2Sh();
 //	testEndian();
-	testLong2bigEndian();
+//	testLong2bigEndian();
+	testBinarayInsert();
 	return 0;
 }
 
@@ -56,4 +58,53 @@ void testEndian()
 	}
 	un.s = htons(un.s);
 	printf("0x%x\n",un.s);
+}
+
+void binarayInsertSort(int a[])
+{
+	int low = 0;
+	int high = 0;
+	int mid = 0;
+	int current = 0;
+	int i;
+	for (i = 1; i < 10; i++)
+	{
+		current = a[i];
+		low = 0;
+		high = i - 1;
+		while (low <= high)
+		{
+			mid = (low + high) / 2;
+			if (a[i] < a[mid])
+			{
+				high = mid - 1;
+			}
+			else
+			{
+				low = mid + 1;
+			}
+		}
+		int j;
+		for (j = i - 1; j >= low; j--)
+		{
+			a[j + 1] = a[j];
+		}
+		a[low] = current;
+	}
+}
+
+void printArray(int array[])
+{
+	printf("ary:");
+	int i;
+	for (i = 0; i < 10; i++)
+		printf("%d ",array[i]);
+	printf("\n");
+}
+
+void testBinarayInsert()
+{
+	int a[] = { 7, 2, 1, 6, 13,21, 8, 4, 33, 26 };
+	binarayInsertSort(a);
+	printArray(a);
 }

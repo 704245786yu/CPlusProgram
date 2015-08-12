@@ -30,6 +30,6 @@ struct shProtocal{
  * @len 协议长度
  * */
 void Sz2Sh(unsigned long concentrator, unsigned char source[], int sourceLen,
-		unsigned char target[], int *targetSize);
+		unsigned short shCmd, unsigned char target[], int *targetSize);
 
 #endif /* PROTOCALANALYSIS_H_ */

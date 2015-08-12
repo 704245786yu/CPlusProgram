@@ -21,39 +21,8 @@ static unsigned short crc16(unsigned char *ptr, unsigned char len);
  * @*targetSize 传出参数，转换后的上海协议长度
  * */
 void Sz2Sh(unsigned long concentrator, unsigned char source[], int sourceLen,
-		unsigned char target[], int *targetSize)
+		unsigned short shCmd, unsigned char target[], int *targetSize)
 {
-	//设置上海协议的命令码
-	unsigned short shCmd = 0;
-	switch(sourceLen){
-	case 5:
-		shCmd = 0xFF11;
-		break;
-	case 29:	//终端(灯控器)发送数据格式
-	case 34:	//29表示注册包或心跳包与该帧一并发送过来
-		shCmd = 0xFF21;
-		break;
-	case 10:	//回路查询响应帧 和 控制指令响应帧
-	case 15:
-		shCmd = 0xFF31;
-		break;
-	case 53:	//3相电查询响应帧
-	case 58:
-		shCmd = 0xFF33;
-		break;
-	case 20:	//读取网关本地时间响应帧
-	case 25:
-		shCmd = 0xFF34;
-		break;
-	case 30:	//读取策略时间响应帧
-	case 35:
-		shCmd = 0xFF35;
-		break;
-	default:	//无匹配的帧直接返回
-		*targetSize=0;
-		return;
-	}
-
 	/*
 	if(sourceLen == 5)	//注册包或心跳包
 		shCmd = 0xFF11;
