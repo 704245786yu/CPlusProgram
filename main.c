@@ -29,7 +29,7 @@ int main(void)
 		fprintf(stderr,"open bizServSock failure\n");
 		return -1;
 	}
-	printf("bizServSock:%d, bizServPort :%d is waiting for connect...\n",bizServSock, bizServPort);
+	printf("bizServ sockfd:%d, port:%d is waiting for connect...\n",bizServSock, bizServPort);
 	//创建业务网关处理线程
 	pthread_t biz_pid;
 	int err = pthread_create(&biz_pid, NULL, bizThreadRoutine, &bizServSock);

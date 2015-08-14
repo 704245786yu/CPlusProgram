@@ -9,6 +9,7 @@
 #include "fileCtrl.h"
 #include "CodeTransform.h"
 #include "ProtocolAnalysis.h"
+#include "bizService.h"
 
 #define RCEV_BUF_SIZE 4096
 #define SEND_BUF_SIZE 4096
@@ -24,6 +25,8 @@ unsigned long concentrators[EPOLL_SIZE*2];	//存放集中器地址,sockfd作为�
 concentrator_struct concentrator_ary[EPOLL_SIZE];
 int concentratorNum = 0;	//已加入的集控器数
 pthread_rwlock_t rwlock = PTHREAD_RWLOCK_INITIALIZER;	//控制二分表的读写
+
+int clientNum = 0;
 
 extern int bizClntSock;
 
@@ -63,7 +66,6 @@ void epollService(short termServPort)
 		perror("create epoll error:");
 		exit(-1);
 	}
-	printf("epoll fd:%d\n", epfd);
 
 	struct epoll_event event;
 	event.events = EPOLLIN;
@@ -72,12 +74,13 @@ void epollService(short termServPort)
 		perror("add termServSock to epoll error:");
 		exit(-1);
 	}
-	printf("termServSock:%d, termServPort:%d is waiting for connect...\n",termServSock, termServPort);
+	printf("termServ sockfd:%d, port:%d is waiting for connect...\n",termServSock, termServPort);
 
 	int i;	//for循环用
 	int clnt_sock;	//存放链接上来的客户端Socket句柄
 	struct epoll_event ep_events[EPOLL_SIZE];	//存放epoll有事件发生时产生的event
 	int event_cnt;
+
 	while(1)
 	{
 		event_cnt = epoll_wait(epfd, ep_events, EPOLL_SIZE, -1);
@@ -98,7 +101,7 @@ void epollService(short termServPort)
 					perror("termServSock accpet error:");
 					continue;
 				}
-//				set_fl(clnt_sock, O_NONBLOCK); //设置成非阻塞
+				set_fl(clnt_sock, O_NONBLOCK); //设置成非阻塞
 				event.events = EPOLLIN | EPOLLET;
 				event.data.fd = clnt_sock;
 				if(epoll_ctl(epfd, EPOLL_CTL_ADD, clnt_sock, &event)==-1)
@@ -106,7 +109,7 @@ void epollService(short termServPort)
 					perror("add clnt_sock to epoll error:");
 					exit(-1);
 				}
-//				printf("a term clnt_sock:%d connected\n",clnt_sock);
+				printf("accepted clientNum:%d\n",++clientNum);
 			}else{
 				//处理客户端接收数据事件
 				int j;
@@ -119,7 +122,7 @@ void epollService(short termServPort)
 				//没有找到空闲线程处理，则关闭此次socekt链接
 				if (j >= MAX_PTHREAD_NUM)
 				{
-					fprintf(stderr, "can't find free epoll thread\n");
+					fprintf(stderr, "epoll busy,close clnt_fd:%d, clientNum:%d\n", ep_events[i].data.fd,--clientNum);
 					shutdown(ep_events[i].data.fd, SHUT_RDWR);
 					close(ep_events[i].data.fd);
 					continue;
@@ -144,10 +147,10 @@ static void init_pthread_pool(){
 		pthread_mutex_lock(thread_mutex + i);//对应线程锁
 	}
 	int res;
-//	pthread_attr_t attr;
-//	pthread_attr_init(&attr);
-//	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-//	pthread_attr_setscope(&attr, PTHREAD_SCOPE_SYSTEM);
+	pthread_attr_t attr;
+	pthread_attr_init(&attr);
+	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+	pthread_attr_setscope(&attr, PTHREAD_SCOPE_SYSTEM);
 
 	for(i = 0; i < MAX_PTHREAD_NUM; i++) {
 		res = pthread_create(tid+i, NULL, pool_thread_handle, thread_param[i]);
@@ -176,8 +179,8 @@ static void* pool_thread_handle(void* thread_param)
 	{
 		pthread_mutex_lock(thread_mutex + thread_index);//加锁，没有数据接收时睡眠线程
 
-				struct timeval t_start;
-				gettimeofday(&t_start,NULL);
+		struct timeval t_start;
+		gettimeofday(&t_start,NULL);
 
 		clnt_sock = i_thread_param[2];//socket 句柄
 		memset(recvBuf,0,sizeof(recvBuf));
@@ -188,7 +191,7 @@ static void* pool_thread_handle(void* thread_param)
 				i_thread_param[0] = 0;//线程空闲
 				continue;
 			}else{
-				fprintf(stderr, "recv term sockfd:%d error %d:%s, close clnt_sock\n",clnt_sock,errno,strerror(errno));
+				fprintf(stderr, "recv term sockfd:%d error %d:%s, close, clientNum:%d\n",clnt_sock,errno,strerror(errno),--clientNum);
 				close(clnt_sock);
 				i_thread_param[0] = 0;//线程空闲
 				continue;
@@ -241,6 +244,7 @@ static void* pool_thread_handle(void* thread_param)
 			break;
 		}
 
+		//更新二叉树
 		if(shCmd == 0xFF11 || isIncluHeart==1)
 		{
 			concentrators[clnt_sock]=bigEndian2long(recvBuf,5);
@@ -258,14 +262,13 @@ static void* pool_thread_handle(void* thread_param)
 		if(shCmd)
 		{
 			if(isIncluHeart == 0){	//不包含心跳包的数据包
-
 				memset(sendBuf, 0, SEND_BUF_SIZE);
 				Sz2Sh(concentrators[clnt_sock], recvBuf, recvlen, shCmd, sendBuf, &shSize);
 				if(send(clnt_sock, sendBuf, shSize, MSG_NOSIGNAL) == -1)
 					fprintf(stderr, "echo clnt error %d:%s\n",errno, strerror(errno));
-				if(send(bizClntSock, sendBuf, shSize, MSG_DONTWAIT) == -1)
-					fprintf(stderr, "send to biz error %d:%s\n",errno, strerror(errno));
-
+//				if(send(bizClntSock, sendBuf, shSize, MSG_NOSIGNAL) == -1)
+//					fprintf(stderr, "send to biz:%d error %d:%s\n",bizClntSock, errno, strerror(errno));
+				sendMsg(sendBuf, shSize);
 			}else{
 				memset(sendBuf, 0, SEND_BUF_SIZE);
 				Sz2Sh(concentrators[clnt_sock], recvBuf, 5, shCmd, sendBuf, &shSize);	//截取心跳
@@ -288,16 +291,16 @@ static void* pool_thread_handle(void* thread_param)
 		}
 		i_thread_param[0] = 0;//线程空闲
 
-				struct timeval t_end;
-				gettimeofday(&t_end,NULL);
-				long interval = t_end.tv_usec - t_start.tv_usec;
-				if(interval > 1000 || interval < 0)
-					printf("end-start:%ld\n", t_end.tv_usec - t_start.tv_usec);
+		struct timeval t_end;
+		gettimeofday(&t_end,NULL);
+		long interval = t_end.tv_usec - t_start.tv_usec;
+		if(interval > 1000 || interval < 0)
+			printf("end-start:%ld\n", t_end.tv_usec - t_start.tv_usec);
 	}
    pthread_exit(NULL);
 }
 
-/*定时扫描二叉表，找出超过超时时间未发心跳的集控器*/
+/*定时扫描二叉表，移除超过超时时间未发心跳的集控器*/
 void* timer_routine(void *arg)
 {
 	int i;
@@ -309,6 +312,7 @@ void* timer_routine(void *arg)
 			if(concentrator_ary[i].timeout > MAX_TIMEOUT){	//超过超时时间移除该终端
 				memmove(concentrator_ary+i, concentrator_ary+i+1, concentratorNum-i);
 				concentratorNum--;
+				printf("concentratorNum--");
 			}else
 				concentrator_ary[i].timeout++;
 			pthread_rwlock_unlock(&rwlock);
@@ -337,6 +341,7 @@ int find_concentrator(unsigned long concentrator){
 }
 
 /*二分法插入，并进行数据的更新*/
+int times = 0;
 static int create_concentrator_table(concentrator_struct tempConcentrator)
 {
 	if(concentratorNum >= EPOLL_SIZE)
@@ -365,5 +370,6 @@ static int create_concentrator_table(concentrator_struct tempConcentrator)
 	}
 	concentrator_ary[low] = tempConcentrator;
 	concentratorNum++;
+//	printf("times:%d\n", ++times);
 	return 0;
 }

@@ -1,10 +1,13 @@
 #include <errno.h>
+#include <pthread.h>
 #include "bizService.h"
 #include "CodeTransform.h"
 #include "epollService.h"
+#include "fileCtrl.h"
 
 static int bizServSock;	//业务Server Socket
 int bizClntSock = -1;	//业务Client Socket，若为-1表示bizClntSock未准备好，需要等待业务网关连接
+pthread_mutex_t send_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 /*解包
  * @return lastIndex 最后未成功解析的帧头位置
@@ -18,18 +21,19 @@ void* bizThreadRoutine(void* arg)
 	while( (bizClntSock= accept(bizServSock, NULL, NULL)) == -1 )
 		perror("accept bizClntSock error:");
 	printf("biz client socket:%d connected\n",bizClntSock);
-
+//	set_fl(bizClntSock,O_NONBLOCK);
 	unsigned char recvbuf[MAX_RECVBUFF] = {0};
 	int recvlen;
 	int offset = 0;	//redvbuf的偏移量，偏移量之前的内容为上次解析剩下的包
 	while(1)
 	{
+//		sleep(60);
 		memset(recvbuf+offset, 0, MAX_RECVBUFF-offset);
 		recvlen = read(bizClntSock, recvbuf+offset, MAX_RECVBUFF-offset);
 		if(recvlen <= 0)
 		{
 			//关闭旧biz client socket，并重新连接
-			perror("read biz client socket error");
+			perror("read biz sockfd error");
 			close(bizClntSock);
 			bizClntSock = -1;	//表示bizClntSock不可用
 			printf("close biz client socket, accept a new client socket\n");
@@ -50,6 +54,14 @@ void* bizThreadRoutine(void* arg)
 		}
 	}
 	pthread_exit(NULL);
+}
+
+void sendMsg(unsigned char buf[], int len)
+{
+	pthread_mutex_lock(&send_mutex);
+	if(send(bizClntSock, buf, len, MSG_DONTWAIT) == -1)
+		fprintf(stderr, "send to biz:%d error %d:%s\n",bizClntSock, errno, strerror(errno));
+	pthread_mutex_unlock(&send_mutex);
 }
 
 /*解包

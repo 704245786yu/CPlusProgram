@@ -10,5 +10,6 @@
 
 /*业务线程程序,等待业务网关连接，获得业务端口后，开启业务网关读、写线程*/
 void* bizThreadRoutine(void* arg);
+void sendMsg(unsigned char buf[], int len);
 
 #endif /* BIZSERVICE_H_ */
